@@ -49,7 +49,14 @@ async function sendMessage() {
   const data = await res.json();
 
   // Basit filtreleme
-  const found = data.filter(p => p.name.toLowerCase().includes(text.toLowerCase()));
+ // Kullanıcının yazdığındaki kelimeleri ayrı ayrı kontrol et
+const terms = text.toLowerCase().split(" ").filter(t => t.length > 2);
+
+const found = data.filter(p => {
+  const haystack = `${p.name} ${p.category} ${p.brand}`.toLowerCase();
+  return terms.every(term => haystack.includes(term));
+});
+
 
   if (found.length > 0) {
     msgBox.innerHTML += `<div><b>🤖 Asistan:</b> ${found.length} ürün buldum:</div>`;
@@ -70,3 +77,4 @@ async function sendMessage() {
 </script>
 </body>
 </html>
+
