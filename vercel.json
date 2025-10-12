@@ -1,6 +1,8 @@
 {
   "functions": {
-    "api/**/*.js": { "runtime": "nodejs20.x" }
+    "api/**/*.js": {
+      "runtime": "vercel-node@20.0.0"
+    }
   },
   "rewrites": [
     { "source": "/", "destination": "/widget.html" }
