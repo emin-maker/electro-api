@@ -49,7 +49,13 @@ app.get("/api/products", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+import { readFileSync } from "fs";
 
+app.get("/widget.html", (req, res) => {
+  const html = readFileSync(path.join(__dirname, "widget.html"), "utf8");
+  res.type("html").send(html);
+});
 app.listen(PORT, () => {
   console.log(`✅ Server is running on http://localhost:${PORT}`);
 });
+
