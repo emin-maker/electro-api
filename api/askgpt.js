@@ -4,19 +4,18 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export const config = {
-  runtime: "edge", // Vercel edge function olarak çalışsın
-};
-
-export default async function handler(req) {
+export default async function handler(req, res) {
   try {
-    const { question } = await req.json();
+    // Body verisini JSON olarak al
+    const buffers = [];
+    for await (const chunk of req) {
+      buffers.push(chunk);
+    }
+    const data = JSON.parse(Buffer.concat(buffers).toString());
+    const question = data?.question || "";
 
     if (!question) {
-      return new Response(
-        JSON.stringify({ error: "No question provided" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
+      return res.status(400).json({ error: "No question provided" });
     }
 
     const completion = await client.chat.completions.create({
@@ -25,22 +24,16 @@ export default async function handler(req) {
         {
           role: "system",
           content:
-            "Sen Electro Beyaz Shop'un satış danışmanısın. Kullanıcıya beyaz eşya, elektronik ve ev aletleri hakkında doğal, samimi ve kısa tavsiyeler ver.",
+            "Sen Electro Beyaz Shop'un yapay zekâ satış danışmanısın. Kullanıcıya beyaz eşya, elektronik ve ev aletleri hakkında doğal, samimi ve kısa tavsiyeler ver.",
         },
         { role: "user", content: question },
       ],
     });
 
     const answer = completion.choices[0].message.content;
-
-    return new Response(
-      JSON.stringify({ answer }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
-    );
+    res.status(200).json({ answer });
   } catch (err) {
-    return new Response(
-      JSON.stringify({ error: "GPT error", details: err.message }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    console.error("GPT error:", err);
+    res.status(500).json({ error: "GPT error", details: err.message });
   }
 }
