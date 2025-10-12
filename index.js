@@ -20,17 +20,20 @@ app.get("/api/products", async (req, res) => {
         return res.status(500).json({ error: "XML parse error" });
       }
 
-      const items = result?.root?.items?.item || [];
+      const items = result?.products?.product || [];
       const products = Array.isArray(items) ? items : [items];
 
       const formatted = products.map(prod => ({
-        id: prod.id || "",
-        name: prod.name || "",
+        id: prod.sku || "",
+        name: prod.name?.trim() || "",
         price: parseFloat(prod.price) || 0,
-        stock: parseInt(prod.stock) || 0,
-        image: prod.image || "",
-        description: prod.description || "",
-        url: prod.link || ""
+        currency: prod.kur || "TL",
+        stock: parseInt(prod.quantity) || 0,
+        brand: prod.productBrand || "",
+        category: prod.productCategory || "",
+        image: prod.imgUrl || "",
+        url: prod.url || "",
+        description: prod.name || ""
       }));
 
       res.json(formatted);
