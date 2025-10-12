@@ -11,7 +11,7 @@ export default async function handler(req, res) {
 
   try {
     const client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+      apiKey: process.env.EBS_Key,
     });
 
     const { question } = req.body;
