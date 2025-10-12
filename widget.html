@@ -52,10 +52,23 @@ async function sendMessage() {
  // Kullanıcının yazdığındaki kelimeleri ayrı ayrı kontrol et
 const terms = text.toLowerCase().split(" ").filter(t => t.length > 2);
 
+
+  // Akıllı arama: hem kelimeleri hem sayılarını dikkate alır
+const terms = text.toLowerCase().split(" ").filter(t => t.length > 1);
 const found = data.filter(p => {
-  const haystack = `${p.name} ${p.category} ${p.brand}`.toLowerCase();
-  return terms.every(term => haystack.includes(term));
+  const name = `${p.name} ${p.category} ${p.brand}`.toLowerCase();
+
+  // Kullanıcı program sayısı belirttiyse
+  const numberMatch = text.match(/\d+/);
+  if (numberMatch) {
+    const num = numberMatch[0];
+    if (!name.includes(num)) return false; // program sayısı uymuyorsa ele
+  }
+
+  // Her kelime ad, kategori veya markada geçmeli
+  return terms.every(term => name.includes(term));
 });
+
 
 
   if (found.length > 0) {
@@ -77,4 +90,5 @@ const found = data.filter(p => {
 </script>
 </body>
 </html>
+
 
