@@ -1,51 +1,56 @@
 import OpenAI from "openai";
 
-export default async function handler(req, res) {
+export const config = {
+  runtime: "nodejs20.x",
+};
+
+export default async function handler(req) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      { status: 405, headers: { "Content-Type": "application/json" } }
+    );
   }
 
   try {
-    // 🔧 Body'yi manuel oku (Vercel req.body vermiyor)
-    let body = "";
-    await new Promise((resolve, reject) => {
-      req.on("data", chunk => (body += chunk));
-      req.on("end", resolve);
-      req.on("error", reject);
-    });
-
-    const data = body ? JSON.parse(body) : {};
+    // Vercel Body Parse Fix
+    const body = await req.text();
+    const data = JSON.parse(body || "{}");
     const question = data.question || "";
 
     if (!question) {
-      return res.status(400).json({ error: "No question provided" });
+      return new Response(
+        JSON.stringify({ error: "No question provided" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
     }
 
-    // ✅ OpenAI istemcisini oluştur
     const client = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    // ✅ ChatGPT'den yanıt iste
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content:
-            "Sen Electro Beyaz Shop'un yapay zekâ satış danışmanısın. Kullanıcıya beyaz eşya, elektronik ve ev aletleri hakkında doğal, kısa, samimi ve yardımcı cevaplar ver.",
+            "Sen Electro Beyaz Shop'un satış danışmanısın. Kullanıcıya beyaz eşya, elektronik ve ev aletleri hakkında doğal, samimi, kısa ve yardımcı tavsiyeler ver.",
         },
         { role: "user", content: question },
       ],
     });
 
     const answer = completion.choices[0].message.content;
-    return res.status(200).json({ answer });
+    return new Response(
+      JSON.stringify({ answer }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
   } catch (err) {
-    console.error("⚠️ GPT Error:", err);
-    return res.status(500).json({
-      error: "GPT error",
-      details: err.message,
-    });
+    console.error("GPT Error:", err);
+    return new Response(
+      JSON.stringify({ error: "GPT error", details: err.message }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
   }
 }
