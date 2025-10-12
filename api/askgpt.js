@@ -6,13 +6,14 @@ const client = new OpenAI({
 
 export default async function handler(req, res) {
   try {
-    // Body verisini JSON olarak al
+    // 🔧 Body'yi düzgün al (bazı Vercel ortamlarında req.body undefined olur)
     const buffers = [];
     for await (const chunk of req) {
       buffers.push(chunk);
     }
-    const data = JSON.parse(Buffer.concat(buffers).toString());
-    const question = data?.question || "";
+    const rawBody = Buffer.concat(buffers).toString();
+    const data = rawBody ? JSON.parse(rawBody) : {};
+    const question = data.question || "";
 
     if (!question) {
       return res.status(400).json({ error: "No question provided" });
