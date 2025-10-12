@@ -65,11 +65,14 @@ async function sendMessage() {
       });
     } else {
       // GPT entegrasyonu
+      console.log("GPT'ye gönderilen veri:", text);
+
       const gptRes = await fetch(gptURL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: text }),
-      });
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ question: text }),
+});
+
       const gptData = await gptRes.json();
       msgBox.innerHTML += `<div><b>🤖 Asistan:</b> ${gptData.answer}</div>`;
     }
@@ -83,3 +86,4 @@ async function sendMessage() {
 </script>
 </body>
 </html>
+
