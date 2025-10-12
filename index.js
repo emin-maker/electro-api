@@ -2,12 +2,18 @@ import express from "express";
 import fetch from "node-fetch";
 import xml2js from "xml2js";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const XML_URL = "https://www.electrobeyazshop.com/outputxml/index.php?xml_service_id=11";
 
 app.use(cors());
+app.use(express.static(__dirname)); // 🔥 Statik dosyaları (widget.html gibi) gösterebilmek için
 
 app.get("/api/products", async (req, res) => {
   try {
@@ -16,7 +22,7 @@ app.get("/api/products", async (req, res) => {
 
     xml2js.parseString(xmlText, { explicitArray: false }, (err, result) => {
       if (err) {
-        console.error(err);
+        console.error("XML parse error:", err);
         return res.status(500).json({ error: "XML parse error" });
       }
 
@@ -39,9 +45,11 @@ app.get("/api/products", async (req, res) => {
       res.json(formatted);
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Fetch error" });
+    console.error("Fetch or process error:", error);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-app.listen(PORT, () => console.log(`✅ Running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`✅ Server is running on http://localhost:${PORT}`);
+});
