@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 
 export const config = {
-  runtime: "nodejs20.x",
+  runtime: "nodejs", // ✅ doğru runtime
 };
 
 export default async function handler(req) {
@@ -13,9 +13,9 @@ export default async function handler(req) {
   }
 
   try {
-    // Vercel Body Parse Fix
-    const body = await req.text();
-    const data = JSON.parse(body || "{}");
+    // Body verisini oku (Vercel req.json desteklemiyor)
+    const rawBody = await req.text();
+    const data = rawBody ? JSON.parse(rawBody) : {};
     const question = data.question || "";
 
     if (!question) {
@@ -25,23 +25,26 @@ export default async function handler(req) {
       );
     }
 
+    // ✅ OpenAI istemcisi
     const client = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
 
+    // ✅ GPT'den yanıt al
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content:
-            "Sen Electro Beyaz Shop'un satış danışmanısın. Kullanıcıya beyaz eşya, elektronik ve ev aletleri hakkında doğal, samimi, kısa ve yardımcı tavsiyeler ver.",
+            "Sen Electro Beyaz Shop'un yapay zekâ satış danışmanısın. Kullanıcıya beyaz eşya, elektronik ve ev aletleri hakkında doğal, samimi ve kısa tavsiyeler ver.",
         },
         { role: "user", content: question },
       ],
     });
 
     const answer = completion.choices[0].message.content;
+
     return new Response(
       JSON.stringify({ answer }),
       { status: 200, headers: { "Content-Type": "application/json" } }
