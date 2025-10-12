@@ -1,9 +1,10 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api/**/*.js", "use": "@vercel/node" }
+    { "src": "api/**/*.js", "use": "@vercel/node" },
+    { "src": "widget.html", "use": "@vercel/static" }
   ],
-  "rewrites": [
-    { "source": "/", "destination": "/widget.html" }
+  "routes": [
+    { "src": "/", "dest": "/widget.html" }
   ]
 }
