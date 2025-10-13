@@ -6,8 +6,8 @@
     <title>Electro Asistan</title>
     <style>
       body {
-        font-family: "Poppins", sans-serif;
-        background: #f7f9fc;
+        font-family: "Poppins", "Segoe UI", sans-serif;
+        background: #f2f5f8;
         margin: 0;
         padding: 0;
         display: flex;
@@ -19,28 +19,38 @@
       .chat-container {
         width: 100%;
         max-width: 420px;
-        background: white;
+        background: #fff;
         border-radius: 18px;
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
         overflow: hidden;
         display: flex;
         flex-direction: column;
       }
 
       .chat-header {
-        background: linear-gradient(135deg, #0078ff, #00bfff);
+        background: linear-gradient(135deg, #0056b3, #0078ff);
         color: white;
         text-align: center;
         padding: 14px;
         font-weight: 600;
         letter-spacing: 0.3px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      .chat-header::before {
+        content: "💡";
+        font-size: 18px;
       }
 
       .chat-body {
-        padding: 12px;
+        padding: 14px;
         flex: 1;
         overflow-y: auto;
         scroll-behavior: smooth;
+        background: #f8faff;
       }
 
       .chat-message {
@@ -57,30 +67,32 @@
       }
 
       .chat-message p {
-        background: #e9f2ff;
+        background: #eaf3ff;
         display: inline-block;
         padding: 10px 14px;
-        border-radius: 10px;
+        border-radius: 12px;
         max-width: 80%;
       }
 
       .user p {
-        background: #0078ff;
+        background: #0056b3;
         color: white;
       }
 
+      /* Ürün kartları */
       .product-card {
         background: white;
-        border: 1px solid #eee;
+        border: 1px solid #e1e4e8;
         border-radius: 12px;
         padding: 12px;
         margin: 10px 0;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-        transition: transform 0.2s;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        transition: all 0.25s ease;
       }
 
       .product-card:hover {
-        transform: scale(1.02);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
       }
 
       .product-card img {
@@ -92,27 +104,35 @@
       .product-card h3 {
         font-size: 1rem;
         margin: 4px 0;
+        color: #003a75;
       }
 
       .product-card p {
         margin: 2px 0;
         font-size: 0.9rem;
+        color: #444;
       }
 
       .product-card a {
         display: inline-block;
-        background: #0078ff;
+        background: #0056b3;
         color: white;
         text-decoration: none;
         padding: 6px 12px;
         border-radius: 8px;
         margin-top: 6px;
+        transition: background 0.3s;
+      }
+
+      .product-card a:hover {
+        background: #00408f;
       }
 
       .chat-input {
         display: flex;
         padding: 10px;
         border-top: 1px solid #ddd;
+        background: #fff;
       }
 
       .chat-input input {
@@ -120,22 +140,34 @@
         padding: 10px;
         border-radius: 8px;
         border: 1px solid #ccc;
+        outline: none;
+        font-size: 14px;
+      }
+
+      .chat-input input:focus {
+        border-color: #0078ff;
+        box-shadow: 0 0 3px rgba(0, 120, 255, 0.3);
       }
 
       .chat-input button {
-        background: #0078ff;
+        background: #0056b3;
         color: white;
         border: none;
         border-radius: 8px;
         padding: 10px 16px;
         margin-left: 8px;
         cursor: pointer;
+        transition: all 0.3s;
+      }
+
+      .chat-input button:hover {
+        background: #00408f;
       }
     </style>
   </head>
   <body>
     <div class="chat-container">
-      <div class="chat-header">💬 Electro Asistan</div>
+      <div class="chat-header">Electro Asistan</div>
       <div class="chat-body" id="chat-body">
         <div class="chat-message bot">
           <p>Merhaba! Ben Electro Asistan. Size nasıl yardımcı olabilirim?</p>
