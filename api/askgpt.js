@@ -20,31 +20,38 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "No question provided" });
     }
 
-    // 1️⃣ Kullanıcı sorgusuna göre ürünleri çek
+    // 1️⃣ Ürünleri getir
     const searchUrl = `https://electro-api-swart.vercel.app/api/products?q=${encodeURIComponent(
       question
     )}`;
     const productsResponse = await fetch(searchUrl);
     const productData = await productsResponse.json();
 
+    // 2️⃣ Eğer ürün varsa GPT’ye kısa bir özet hazırla
     let productSummary = "Uygun ürün bulunamadı.";
     if (productData.count > 0) {
-      const first = productData.products[0];
-      productSummary = `Bulunan ürün: ${first.name} – ${first.price} ${first.kur}. Marka: ${first.productBrand}. Kategori: ${first.productCategory}.`;
+      const list = productData.products
+        .slice(0, 5)
+        .map(
+          (p) =>
+            `- ${p.name} (${p.productBrand}) – ${p.price} ${p.kur}. [Ürüne Git](${p.url})`
+        )
+        .join("\n");
+      productSummary = `Bulunan ${productData.count} ürün:\n${list}`;
     }
 
-    // 2️⃣ GPT cevabı oluştur
+    // 3️⃣ GPT'yi çalıştır
     const response = await client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content:
-            "Sen Electro Beyaz Shop’un ürün asistanısın. Kullanıcıya beyaz eşya, kampanya, fiyat ve stok hakkında yardımcı ol. Ürün verilerini sana 'productSummary' değişkeniyle veriyorum, bunları cevabında kullan.",
+            "Sen Electro Beyaz Shop'un akıllı ürün asistanısın. Kullanıcıya beyaz eşya, fiyat, marka, stok ve kampanya bilgilerini doğal bir dille anlat. Eğer birden fazla ürün varsa tablo veya madde listesiyle sun. Kullanıcıyı sitedeki ürün linklerine yönlendir.",
         },
         {
           role: "user",
-          content: `Soru: ${question}\nÜrün verisi: ${productSummary}`,
+          content: `Soru: ${question}\n\nÜrün verisi:\n${productSummary}`,
         },
       ],
     });
