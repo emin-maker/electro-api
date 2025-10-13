@@ -2,6 +2,7 @@ import OpenAI from "openai";
 
 export const config = {
   runtime: "nodejs",
+  maxDuration: 60,
 };
 
 export default async function handler(req, res) {
@@ -15,30 +16,43 @@ export default async function handler(req, res) {
     });
 
     const { question } = req.body;
-
-    if (!question || question.trim() === "") {
+    if (!question) {
       return res.status(400).json({ error: "No question provided" });
     }
 
-    const completion = await client.chat.completions.create({
+    // 1️⃣ Kullanıcı sorgusuna göre ürünleri çek
+    const searchUrl = `https://electro-api-swart.vercel.app/api/products?q=${encodeURIComponent(
+      question
+    )}`;
+    const productsResponse = await fetch(searchUrl);
+    const productData = await productsResponse.json();
+
+    let productSummary = "Uygun ürün bulunamadı.";
+    if (productData.count > 0) {
+      const first = productData.products[0];
+      productSummary = `Bulunan ürün: ${first.name} – ${first.price} ${first.kur}. Marka: ${first.productBrand}. Kategori: ${first.productCategory}.`;
+    }
+
+    // 2️⃣ GPT cevabı oluştur
+    const response = await client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content:
-            "Sen Electro Beyaz Shop’un dijital asistanısın. Kullanıcıya beyaz eşya, kampanya, ürün ve stok bilgileri hakkında yardımcı ol. Açıklamaları doğal ve samimi bir dille yap.",
+            "Sen Electro Beyaz Shop’un ürün asistanısın. Kullanıcıya beyaz eşya, kampanya, fiyat ve stok hakkında yardımcı ol. Ürün verilerini sana 'productSummary' değişkeniyle veriyorum, bunları cevabında kullan.",
         },
-        { role: "user", content: question },
+        {
+          role: "user",
+          content: `Soru: ${question}\nÜrün verisi: ${productSummary}`,
+        },
       ],
     });
 
-    res.status(200).json({
-      answer: completion.choices[0].message.content,
-    });
+    const answer = response.choices[0].message.content;
+    res.status(200).json({ answer, productData });
   } catch (error) {
-    console.error("API hatası:", error);
-    res
-      .status(500)
-      .json({ error: "Sunucuya bağlanırken hata oluştu.", details: error.message });
+    console.error("Asistan hata:", error);
+    res.status(500).json({ error: "Asistan yanıt veremedi." });
   }
 }
