@@ -20,44 +20,39 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "No question provided" });
     }
 
-    // 1️⃣ Ürünleri getir
-    const searchUrl = `https://electro-api-swart.vercel.app/api/products?q=${encodeURIComponent(
-      question
-    )}`;
+    // 🔹 1. Ürün verisini çek
+    const searchUrl = `https://electro-api-swart.vercel.app/api/products?q=${encodeURIComponent("")}`;
     const productsResponse = await fetch(searchUrl);
     const productData = await productsResponse.json();
 
-    // 2️⃣ Eğer ürün varsa GPT’ye kısa bir özet hazırla
-    let productSummary = "Uygun ürün bulunamadı.";
-    if (productData.count > 0) {
-      const list = productData.products
-        .slice(0, 5)
-        .map(
-          (p) =>
-            `- ${p.name} (${p.productBrand}) – ${p.price} ${p.kur}. [Ürüne Git](${p.url})`
-        )
-        .join("\n");
-      productSummary = `Bulunan ${productData.count} ürün:\n${list}`;
-    }
+    // 🔹 2. GPT’ye anlamlı bir ürün listesi oluştur
+    const allProducts = productData.products
+      .slice(0, 100) // ilk 100 ürünü al (fazlasına gerek yok)
+      .map(
+        (p) =>
+          `• ${p.name} (${p.productBrand}) - ${p.productCategory} - ${p.price} ${p.kur} (${p.url})`
+      )
+      .join("\n");
 
-    // 3️⃣ GPT'yi çalıştır
+    // 🔹 3. GPT’ye ürünleri verip sorgu eşleştirmesini yaptır
     const response = await client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content:
-            "Sen Electro Beyaz Shop'un akıllı ürün asistanısın. Kullanıcıya beyaz eşya, fiyat, marka, stok ve kampanya bilgilerini doğal bir dille anlat. Eğer birden fazla ürün varsa tablo veya madde listesiyle sun. Kullanıcıyı sitedeki ürün linklerine yönlendir.",
+          content: `Sen Electro Beyaz Shop'un ürün asistanısın.
+Aşağıda mağazadaki ürün listesi var. Kullanıcı bir şey sorduğunda, listedeki en uygun ürün(ler)i anlamına göre bul ve öner.
+Cevapta fiyat, marka ve linki mutlaka ver. Ürün yoksa benzer alternatif sun.`,
         },
         {
           role: "user",
-          content: `Soru: ${question}\n\nÜrün verisi:\n${productSummary}`,
+          content: `Kullanıcı sorusu: "${question}"\n\nÜrün listesi:\n${allProducts}`,
         },
       ],
     });
 
     const answer = response.choices[0].message.content;
-    res.status(200).json({ answer, productData });
+    res.status(200).json({ answer });
   } catch (error) {
     console.error("Asistan hata:", error);
     res.status(500).json({ error: "Asistan yanıt veremedi." });
