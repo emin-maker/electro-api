@@ -1,119 +1,177 @@
 <!DOCTYPE html>
 <html lang="tr">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Electro Asistan</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #fafafa;
-      margin: 0;
-      padding: 0;
-    }
-    #chat {
-      width: 100%;
-      max-width: 600px;
-      margin: 30px auto;
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      padding: 20px;
-    }
-    #messages {
-      height: 400px;
-      overflow-y: auto;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 10px;
-      margin-bottom: 10px;
-      background-color: #f9f9f9;
-    }
-    .user {
-      color: #0066cc;
-      margin-bottom: 8px;
-    }
-    .bot {
-      color: #333;
-      margin-bottom: 8px;
-    }
-    input {
-      width: calc(100% - 100px);
-      padding: 10px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-    }
-    button {
-      padding: 10px 20px;
-      border: none;
-      background: #0066cc;
-      color: white;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #004999;
-    }
-  </style>
-</head>
-<body>
-  <div id="chat">
-    <h3>Electro Asistan 🤖</h3>
-    <div id="messages"></div>
-    <div>
-      <input id="userInput" type="text" placeholder="Sorunuzu yazın..." />
-      <button onclick="sendMessage()">Gönder</button>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Electro Asistan</title>
+    <style>
+      body {
+        font-family: "Poppins", sans-serif;
+        background: #f7f9fc;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+
+      .chat-container {
+        width: 100%;
+        max-width: 420px;
+        background: white;
+        border-radius: 18px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .chat-header {
+        background: linear-gradient(135deg, #0078ff, #00bfff);
+        color: white;
+        text-align: center;
+        padding: 14px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+      }
+
+      .chat-body {
+        padding: 12px;
+        flex: 1;
+        overflow-y: auto;
+        scroll-behavior: smooth;
+      }
+
+      .chat-message {
+        margin: 10px 0;
+        line-height: 1.5;
+      }
+
+      .user {
+        text-align: right;
+      }
+
+      .bot {
+        text-align: left;
+      }
+
+      .chat-message p {
+        background: #e9f2ff;
+        display: inline-block;
+        padding: 10px 14px;
+        border-radius: 10px;
+        max-width: 80%;
+      }
+
+      .user p {
+        background: #0078ff;
+        color: white;
+      }
+
+      .product-card {
+        background: white;
+        border: 1px solid #eee;
+        border-radius: 12px;
+        padding: 12px;
+        margin: 10px 0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        transition: transform 0.2s;
+      }
+
+      .product-card:hover {
+        transform: scale(1.02);
+      }
+
+      .product-card img {
+        width: 100%;
+        border-radius: 10px;
+        margin-bottom: 10px;
+      }
+
+      .product-card h3 {
+        font-size: 1rem;
+        margin: 4px 0;
+      }
+
+      .product-card p {
+        margin: 2px 0;
+        font-size: 0.9rem;
+      }
+
+      .product-card a {
+        display: inline-block;
+        background: #0078ff;
+        color: white;
+        text-decoration: none;
+        padding: 6px 12px;
+        border-radius: 8px;
+        margin-top: 6px;
+      }
+
+      .chat-input {
+        display: flex;
+        padding: 10px;
+        border-top: 1px solid #ddd;
+      }
+
+      .chat-input input {
+        flex: 1;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+      }
+
+      .chat-input button {
+        background: #0078ff;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 16px;
+        margin-left: 8px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="chat-container">
+      <div class="chat-header">💬 Electro Asistan</div>
+      <div class="chat-body" id="chat-body">
+        <div class="chat-message bot">
+          <p>Merhaba! Ben Electro Asistan. Size nasıl yardımcı olabilirim?</p>
+        </div>
+      </div>
+      <div class="chat-input">
+        <input id="user-input" type="text" placeholder="Bir şey yazın..." />
+        <button onclick="sendMessage()">Gönder</button>
+      </div>
     </div>
-  </div>
 
-  <script>
-    const messages = document.getElementById("messages");
-    const apiUrl = "https://electro-api-swart.vercel.app/api/askgpt"; // Vercel backend endpoint
+    <script>
+      async function sendMessage() {
+        const input = document.getElementById("user-input");
+        const message = input.value.trim();
+        if (!message) return;
 
-    async function sendMessage() {
-      const input = document.getElementById("userInput");
-      const text = input.value.trim();
-      if (!text) return;
+        const chatBody = document.getElementById("chat-body");
+        chatBody.innerHTML += `<div class='chat-message user'><p>${message}</p></div>`;
+        input.value = "";
 
-      appendMessage("user", text);
-      input.value = "";
-
-      try {
-        const response = await fetch(apiUrl, {
+        const response = await fetch("/api/askgpt", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: text }),
+          body: JSON.stringify({ question: message }),
         });
 
         const data = await response.json();
+        const botReply =
+          data.htmlOutput ||
+          data.answer ||
+          "Bir hata oluştu, lütfen tekrar deneyin.";
 
-        if (data.answer) {
-          appendMessage("bot", data.answer);
-        } else if (data.error) {
-          appendMessage("bot", `⚠️ Hata: ${data.details || data.error}`);
-        } else {
-          appendMessage("bot", "Cevap alınamadı.");
-        }
-      } catch (err) {
-        console.error("Fetch error:", err);
-        appendMessage("bot", "⚠️ Sunucuya bağlanırken hata oluştu.");
+        chatBody.innerHTML += `<div class='chat-message bot'><div>${botReply}</div></div>`;
+        chatBody.scrollTop = chatBody.scrollHeight;
       }
-    }
-
-    function appendMessage(role, message) {
-      const div = document.createElement("div");
-      div.classList.add(role);
-      div.innerHTML =
-        role === "user"
-          ? `<b>Sen:</b> ${message}`
-          : `<b>Asistan:</b> ${message}`;
-      messages.appendChild(div);
-      messages.scrollTop = messages.scrollHeight;
-    }
-
-    // Hoşgeldin mesajı
-    appendMessage("bot", "Merhaba! Ben Electro Asistan. Size nasıl yardımcı olabilirim?");
-  </script>
-</body>
+    </script>
+  </body>
 </html>
-
