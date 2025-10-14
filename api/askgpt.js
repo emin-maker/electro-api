@@ -1,12 +1,8 @@
-// ============================================
-// 🚀 ELECTRO ASİSTAN v5 (Tek Key, GPT fallback, Cache)
-// ============================================
+import OpenAI from "openai";
 
-// 1 Saatlik cache sistemi (performans için)
-let cache = {
-  data: null,
-  timestamp: 0,
-  ttl: 3600 * 1000,
+export const config = {
+  runtime: "nodejs",
+  maxDuration: 60,
 };
 
 export default async function handler(req, res) {
@@ -14,158 +10,97 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { question } = req.body;
-  if (!question) {
-    return res.status(400).json({ error: "No question provided" });
-  }
-
   try {
-    // 🧠 Cache kontrolü
-    const now = Date.now();
-    let jsonData = null;
+    const client = new OpenAI({ apiKey: process.env.EBS_Key });
+    const { question } = req.body;
+    if (!question)
+      return res.status(400).json({ error: "No question provided" });
 
-    if (cache.data && now - cache.timestamp < cache.ttl) {
-      console.log("🧠 Cache kullanıldı (veri 1 saat içinde).");
-      jsonData = cache.data;
+    // 1️⃣ Kullanıcının cümlesinden marka + ürün tipi çıkar
+    const condense = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "Kullanıcının cümlesinden sadece marka ve ürün tipini çıkar. Örnek: 'bosch kurutma makinesi istiyorum' -> 'bosch kurutma'.",
+        },
+        { role: "user", content: question },
+      ],
+    });
+
+    const keyword = condense.choices[0].message.content.trim();
+    console.log("🔍 Arama kelimesi:", keyword);
+
+    // 2️⃣ XML feed’den ürünleri getir
+    const searchUrl = `https://electro-api-swart.vercel.app/api/products?q=${encodeURIComponent(
+      keyword
+    )}`;
+    const productsResponse = await fetch(searchUrl);
+    const productData = await productsResponse.json();
+
+    // 3️⃣ Ürünleri filtrele: sadece çamaşır, kurutma, dondurucu, buzdolabı vb.
+    const allowedCategories = [
+      "Kurutma Makinesi",
+      "Çamaşır Kurutma Makinesi",
+      "Derin Dondurucu",
+      "Buzdolabı",
+      "Çamaşır Makinesi",
+      "Ankastre Set",
+    ];
+
+    const filtered = (productData.products || []).filter((p) =>
+      allowedCategories.some((cat) =>
+        (p.productCategory || "").toLowerCase().includes(cat.toLowerCase())
+      )
+    );
+
+    // 4️⃣ Ürünleri HTML formatında kart haline getir
+    let htmlOutput = "";
+    if (filtered.length > 0) {
+      const sorted = filtered.sort(
+        (a, b) => parseFloat(a.price) - parseFloat(b.price)
+      );
+
+      htmlOutput = sorted
+        .slice(0, 5)
+        .map(
+          (p) => `
+          <div style="border:1px solid #ddd; border-radius:12px; padding:16px; margin:10px 0; box-shadow:0 2px 8px rgba(0,0,0,0.1); background:#fff;">
+            <img src="${p.imgUrl}" alt="${p.name}" style="width:100%; max-width:280px; border-radius:10px; margin-bottom:10px;">
+            <h3 style="margin:5px 0; font-size:1.1rem; color:#333;">${p.name}</h3>
+            <p style="margin:3px 0;"><strong>Fiyat:</strong> ${p.price} ${p.kur}</p>
+            <p style="margin:3px 0;"><strong>Marka:</strong> ${p.productBrand}</p>
+            <p style="margin:3px 0;"><strong>Kategori:</strong> ${p.productCategory}</p>
+            <a href="${p.url}" target="_blank" style="display:inline-block; background:#0078ff; color:white; text-decoration:none; padding:8px 14px; border-radius:6px; margin-top:8px;">🔗 Ürüne Git</a>
+          </div>`
+        )
+        .join("");
     } else {
-      console.log("🌐 XML verisi yeniden çekiliyor...");
-      const response = await fetch("https://www.electrobeyazshop.com/outputxml/index.php?xml_service_id=11");
-      const xmlText = await response.text();
-
-      try {
-        const match = xmlText.match(/\{.*\}/s);
-        if (match) {
-          jsonData = JSON.parse(match[0]);
-          cache.data = jsonData;
-          cache.timestamp = now;
-          console.log("✅ Cache güncellendi.");
-        } else {
-          console.warn("⚠️ JSON formatı bulunamadı.");
-        }
-      } catch (err) {
-        console.error("⚠️ JSON parse hatası:", err);
-      }
+      htmlOutput =
+        "<p>Üzgünüm, aradığınız kriterlere uygun ürün bulunamadı. Farklı bir marka veya modelle deneyin.</p>";
     }
 
-    // 🔍 Veri kontrolü
-    if (!jsonData || !jsonData.products || jsonData.products.length === 0) {
-      console.log("❌ Veri boş, GPT fallback aktif.");
-      const aiAnswer = await getAIResponse(question);
-      return res.json({ htmlOutput: aiAnswer });
-    }
-
-    const products = jsonData.products || [];
-
-    // 🧩 Normalizasyon fonksiyonu (Türkçe harfleri sadeleştir)
-    const normalize = (str) =>
-      str
-        ?.toLowerCase()
-        .replace(/ğ/g, "g")
-        .replace(/ü/g, "u")
-        .replace(/ş/g, "s")
-        .replace(/ı/g, "i")
-        .replace(/ö/g, "o")
-        .replace(/ç/g, "c")
-        .trim();
-
-    const query = normalize(question);
-
-    // 🔎 Basit akıllı arama algoritması
-    const results = products
-      .map((p) => {
-        const combined = normalize(`${p.name} ${p.productBrand} ${p.productCategory}`);
-        let score = 0;
-        if (combined.includes(query)) score += 5;
-        if (normalize(p.productBrand)?.includes(query)) score += 3;
-        if (normalize(p.productCategory)?.includes(query)) score += 2;
-        if (normalize(p.name)?.includes(query)) score += 1;
-        return { ...p, score };
-      })
-      .filter((p) => p.score > 0)
-      .sort((a, b) => b.score - a.score);
-
-    // 🔁 Sonuç yoksa GPT’ye sor
-    if (results.length === 0) {
-      console.log("🔍 Eşleşme bulunamadı, GPT fallback aktif.");
-      const aiAnswer = await getAIResponse(question);
-      return res.json({ htmlOutput: aiAnswer });
-    }
-
-    // 🖼️ Ürünleri HTML formatında döndür
-    const topProducts = results.slice(0, 4);
-    let htmlOutput = `
-      <div class="chat-message bot"><p>İşte size uygun ürünler 👇</p></div>
-      <div class="product-list">
-    `;
-
-    topProducts.forEach((p) => {
-      htmlOutput += `
-        <div class="product-card">
-          <img src="${p.imgUrl}" alt="${p.name}" style="max-width:150px;border-radius:8px;">
-          <h3>${p.name}</h3>
-          <p><strong>Marka:</strong> ${p.productBrand}</p>
-          <p><strong>Fiyat:</strong> ${p.price} ${p.kur}</p>
-          <a href="${p.url}" target="_blank">🔗 Ürüne Git</a>
-        </div>
-      `;
+    // 5️⃣ GPT’den açıklamalı konuşma oluştur
+    const response = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "Sen Electro Beyaz Shop'un görselli satış asistanısın. Kullanıcının isteğini doğal bir dille yanıtla, sonra HTML olarak ürünleri listele.",
+        },
+        {
+          role: "user",
+          content: `Kullanıcı: ${question}\n\nUygun ürünler (HTML):\n${htmlOutput}`,
+        },
+      ],
     });
 
-    htmlOutput += `</div>`;
-    return res.json({ htmlOutput });
+    const answer = response.choices[0].message.content;
+    res.status(200).json({ answer, htmlOutput, keyword });
   } catch (error) {
-    console.error("🔥 Genel hata:", error);
-    const aiAnswer = await getAIResponse(question);
-    return res.json({ htmlOutput: aiAnswer });
-  }
-}
-
-// ============================================
-// 🧠 GPT Fallback (OpenAI)
-// ============================================
-async function getAIResponse(question) {
-  const OPENAI_KEY = process.env.Electro_Asistan;
-
-  if (!OPENAI_KEY) {
-    console.error("❌ API key bulunamadı (Electro_Asistan).");
-    return `<div class="chat-message bot"><p>⚠️ OpenAI anahtarı tanımlı değil. Lütfen sistem yöneticinize bildirin.</p></div>`;
-  }
-
-  try {
-    const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content:
-              "Sen Electro Asistan’sın. Kullanıcılara beyaz eşya ürünleri hakkında öneriler sunuyorsun. Ürün bulunamazsa alternatif fikirler veya ipuçları ver. Samimi ama profesyonel konuş.",
-          },
-          {
-            role: "user",
-            content: question,
-          },
-        ],
-        temperature: 0.7,
-      }),
-    });
-
-    const data = await aiResponse.json();
-
-    let answer = "Üzgünüm, şu anda yardımcı olamıyorum.";
-    if (data?.choices?.[0]?.message?.content) {
-      answer = data.choices[0].message.content;
-    } else if (data?.error?.message) {
-      answer = `⚠️ OpenAI Hatası: ${data.error.message}`;
-    }
-
-    return `<div class="chat-message bot"><p>${answer}</p></div>`;
-  } catch (error) {
-    console.error("OpenAI fallback hatası:", error);
-    return `<div class="chat-message bot"><p>⚠️ Sistem şu anda yanıt veremiyor. Lütfen tekrar deneyin.</p></div>`;
+    console.error("Asistan hata:", error);
+    res.status(500).json({ error: "Asistan yanıt veremedi." });
   }
 }
