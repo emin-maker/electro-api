@@ -12,40 +12,35 @@ export default async function handler(req, res) {
 
   try {
     const client = new OpenAI({
-      apiKey: process.env.Electro_Asistan,
+      apiKey: process.env.Electro_Asistan, // senin environment key’in
     });
 
     const { question } = req.body;
-    if (!question)
-      return res.status(400).json({ error: "No question provided" });
+    if (!question) return res.status(400).json({ error: "No question provided" });
 
-    // 1️⃣ Kullanıcının sorgusunu sadeleştir
+    // 1️⃣ Anahtar kelimeyi sadeleştir
     const condense = await client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content:
-            "Kullanıcının cümlesinden sadece ürün tipi ve marka çıkar. Örnek: 'Bosch 9 kg çamaşır makinesi' → 'Bosch çamaşır makinesi'.",
+            "Kullanıcının cümlesinden sadece marka ve ürün tipini çıkar. Örnek: 'uğur 7 çekmeceli derin dondurucu' → 'uğur derin dondurucu'",
         },
         { role: "user", content: question },
       ],
     });
 
-    const keyword = condense.choices?.[0]?.message?.content?.trim() || "";
+    const keyword = condense.choices[0].message.content.trim();
 
-    // 2️⃣ XML feed’den ürünleri getir
-    const searchUrl = `https://electro-api-swart.vercel.app/api/products?q=${encodeURIComponent(
-      keyword
-    )}`;
-    const productsResponse = await fetch(searchUrl);
+    // 2️⃣ Ürünleri Electro API'den çek
+    const searchUrl = `https://electro-api-swart.vercel.app/api/products?q=${encodeURIComponent(keyword)}`;
+    const productsResponse = await fetch(searchUrl, { cache: "no-store" });
     const productData = await productsResponse.json();
 
+    // 3️⃣ Eğer data yoksa fallback yap
     let htmlOutput = "";
-    let productCount = productData?.count || 0;
-
-    // 3️⃣ Ürün varsa listele, yoksa boş bırak
-    if (productCount > 0) {
+    if (productData?.products?.length > 0) {
       const sorted = productData.products.sort(
         (a, b) => parseFloat(a.price) - parseFloat(b.price)
       );
@@ -54,56 +49,41 @@ export default async function handler(req, res) {
         .slice(0, 5)
         .map(
           (p) => `
-          <div style="border:1px solid #ddd; border-radius:10px; padding:10px; margin:8px 0; box-shadow:0 2px 6px rgba(0,0,0,0.1); max-width:420px;">
-            <img src="${p.imgUrl}" alt="${p.name}" style="width:100%; max-width:200px; border-radius:8px; margin-bottom:8px;">
-            <h3 style="margin:4px 0;">${p.name}</h3>
-            <p style="margin:2px 0;"><strong>Fiyat:</strong> ${p.price} ${p.kur}</p>
-            <p style="margin:2px 0;"><strong>Marka:</strong> ${p.productBrand}</p>
-            <p style="margin:2px 0;"><strong>Kategori:</strong> ${p.productCategory}</p>
-            <a href="${p.url}" target="_blank" style="display:inline-block; background:#0078ff; color:white; text-decoration:none; padding:6px 10px; border-radius:6px; margin-top:5px;">🔗 Ürüne Git</a>
+          <div style="border:1px solid #ddd; border-radius:12px; padding:12px; margin:10px 0; box-shadow:0 2px 6px rgba(0,0,0,0.08); max-width:95%;">
+            <img src="${p.imgUrl}" alt="${p.name}" style="width:100%; max-width:250px; border-radius:10px; margin-bottom:10px;">
+            <h3 style="margin:5px 0; font-size:16px;">${p.name}</h3>
+            <p><b>Fiyat:</b> ${p.price} ${p.kur}</p>
+            <p><b>Marka:</b> ${p.productBrand}</p>
+            <p><b>Kategori:</b> ${p.productCategory}</p>
+            <a href="${p.url}" target="_blank" style="display:inline-block; background:#0078ff; color:white; text-decoration:none; padding:6px 12px; border-radius:6px;">🔗 Ürüne Git</a>
           </div>`
         )
         .join("");
+    } else {
+      htmlOutput = `
+      <p>Üzgünüm, aradığınız ürün stokta bulunamadı. Ancak benzer ürünleri önermek isterim. Başka bir marka veya kapasite denemek ister misiniz?</p>`;
     }
 
-    // 4️⃣ Fallback konuşma senaryosu
-    let fallbackMessage = "";
-    const lowerQ = question.toLowerCase();
-
-    if (productCount === 0) {
-      if (
-        lowerQ.includes("bozuldu") ||
-        lowerQ.includes("çalışmıyor") ||
-        lowerQ.includes("arıza")
-      ) {
-        fallbackMessage =
-          "Geçmiş olsun! Çamaşır makineniz arızalandıysa yerine yeni bir model seçebiliriz. Size uygun birkaç çamaşır makinesi önerisi getireyim mi?";
-      } else {
-        fallbackMessage =
-          "Üzgünüm, aradığınız özellikte ürün bulunamadı. Farklı bir marka veya kapasiteyle tekrar deneyebilirsiniz.";
-      }
-    }
-
-    // 5️⃣ GPT ile doğal dille cevap oluştur
-    const response = await client.chat.completions.create({
+    // 4️⃣ GPT’ye doğal dil yanıt + HTML gönder
+    const gptResponse = await client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content:
-            "Sen Electro Beyaz Shop'un akıllı satış asistanısın. Kullanıcıya sıcak, doğal ve satış odaklı yanıtlar ver. Ürün varsa öne çıkar, yoksa alternatif öner veya empatik konuş.",
+            "Sen Electro Beyaz Shop'un akıllı satış asistanısın. Kullanıcıya doğal bir dille yardımcı ol, ardından HTML ürün listesini göster.",
         },
         {
           role: "user",
-          content: `Kullanıcı: ${question}\n\nÜrün Sayısı: ${productCount}\nFallback: ${fallbackMessage}\n\nÜrünler (HTML):\n${htmlOutput}`,
+          content: `Kullanıcı: ${question}\n\nÜrün listesi (HTML):\n${htmlOutput}`,
         },
       ],
     });
 
-    const answer = response.choices[0].message.content;
+    const answer = gptResponse.choices[0].message.content;
     res.status(200).json({ answer, htmlOutput, keyword });
   } catch (error) {
     console.error("Asistan hata:", error);
-    res.status(500).json({ error: "Asistan yanıt veremedi." });
+    res.status(500).json({ error: "Asistan yanıt veremedi.", details: error.message });
   }
 }
