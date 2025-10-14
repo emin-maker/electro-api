@@ -1,12 +1,12 @@
 // ================================
-// 🚀 ELECTRO ASİSTAN v3 (Cache Destekli)
+// 🚀 ELECTRO ASİSTAN v4 (CACHE + GPT + HATA RAPORLU)
 // ================================
 
-// Bellek içi cache (1 saat süreyle)
+// Bellek içi cache (1 saat)
 let cache = {
   data: null,
   timestamp: 0,
-  ttl: 3600 * 1000, // 1 saat
+  ttl: 3600 * 1000,
 };
 
 export default async function handler(req, res) {
@@ -20,45 +20,43 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1️⃣ Cache kontrolü
+    // 1️⃣ CACHE KONTROLÜ
     const now = Date.now();
     let jsonData = null;
 
     if (cache.data && now - cache.timestamp < cache.ttl) {
-      console.log("🧠 Cache kullanıldı (hızlı mod)");
+      console.log("🧠 Cache kullanıldı (1 saat içinde).");
       jsonData = cache.data;
     } else {
-      console.log("🌐 Yeni veri çekiliyor...");
+      console.log("🌐 Yeni XML verisi çekiliyor...");
       const response = await fetch("https://www.electrobeyazshop.com/outputxml/index.php?xml_service_id=11");
       const xmlText = await response.text();
 
-      // JSON parse güvenli
       try {
         const match = xmlText.match(/\{.*\}/s);
         if (match) {
           jsonData = JSON.parse(match[0]);
-          // Cache’e kaydet
           cache.data = jsonData;
           cache.timestamp = now;
           console.log("✅ Cache güncellendi.");
         } else {
-          console.warn("⚠️ JSON formatı bulunamadı!");
+          console.warn("⚠️ XML içinde JSON formatı bulunamadı!");
         }
       } catch (err) {
-        console.error("JSON çözümleme hatası:", err);
+        console.error("⚠️ JSON çözümleme hatası:", err);
       }
     }
 
-    // Eğer veri yoksa OpenAI fallback
+    // 2️⃣ DATA KONTROLÜ
     if (!jsonData || !jsonData.products || jsonData.products.length === 0) {
-      console.log("❌ Veri bulunamadı, OpenAI fallback aktif.");
+      console.log("❌ Veri bulunamadı. GPT fallback aktif.");
       const aiAnswer = await getAIResponse(question);
       return res.json({ htmlOutput: aiAnswer });
     }
 
     const products = jsonData.products || [];
 
-    // 2️⃣ Arama
+    // 3️⃣ SORUYU NORMALİZE ET
     const normalize = (str) =>
       str
         ?.toLowerCase()
@@ -72,6 +70,7 @@ export default async function handler(req, res) {
 
     const query = normalize(question);
 
+    // 4️⃣ AKILLI ARAMA SKORU
     const results = products
       .map((p) => {
         const combined = normalize(`${p.name} ${p.productBrand} ${p.productCategory}`);
@@ -85,13 +84,14 @@ export default async function handler(req, res) {
       .filter((p) => p.score > 0)
       .sort((a, b) => b.score - a.score);
 
-    // 3️⃣ Sonuç yoksa OpenAI fallback
+    // 5️⃣ SONUÇ YOKSA GPT'YE GİT
     if (results.length === 0) {
+      console.log("🔍 Eşleşme bulunamadı, GPT fallback aktif.");
       const aiAnswer = await getAIResponse(question);
       return res.json({ htmlOutput: aiAnswer });
     }
 
-    // 4️⃣ HTML oluştur
+    // 6️⃣ ÜRÜNLERİ HTML HALİNE GETİR
     const topProducts = results.slice(0, 4);
     let htmlOutput = `
       <div class="chat-message bot"><p>İşte size uygun ürünler 👇</p></div>
@@ -113,22 +113,29 @@ export default async function handler(req, res) {
     htmlOutput += `</div>`;
     return res.json({ htmlOutput });
   } catch (error) {
-    console.error("API genel hatası:", error);
+    console.error("🔥 API genel hatası:", error);
     const aiAnswer = await getAIResponse(question);
     return res.json({ htmlOutput: aiAnswer });
   }
 }
 
 // ================================
-// 🧠 OPENAI FALLBACK FONKSİYONU
+// 🧠 OPENAI FALLBACK (AKILLI ASİSTAN)
 // ================================
 async function getAIResponse(question) {
+  const OPENAI_KEY = process.env.OPENAI_API_KEY || process.env.EBS_Key;
+
+  if (!OPENAI_KEY) {
+    console.error("❌ API key bulunamadı (OPENAI_API_KEY veya EBS_Key tanımlı değil).");
+    return `<div class="chat-message bot"><p>⚠️ OpenAI anahtarı tanımlı değil. Lütfen sistem yöneticinize bildirin.</p></div>`;
+  }
+
   try {
     const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_KEY}`,
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
@@ -136,7 +143,7 @@ async function getAIResponse(question) {
           {
             role: "system",
             content:
-              "Sen Electro Asistan’sın. Kullanıcıya beyaz eşya tavsiyesi veriyorsun. Samimi ama profesyonel bir dille konuş. Eğer ürün bulunmazsa, öneri ve ipucu ver.",
+              "Sen Electro Asistan’sın. Kullanıcıya beyaz eşya önerileri sunuyorsun. Ürün bulamazsan öneriler ve ipuçları ver. Samimi ama profesyonel bir dil kullan.",
           },
           {
             role: "user",
@@ -148,10 +155,19 @@ async function getAIResponse(question) {
     });
 
     const data = await aiResponse.json();
-    const answer = data?.choices?.[0]?.message?.content || "Üzgünüm, şu anda yardımcı olamıyorum.";
+
+    let answer = "Üzgünüm, şu anda yardımcı olamıyorum.";
+    if (data?.choices?.[0]?.message?.content) {
+      answer = data.choices[0].message.content;
+    } else if (data?.error?.message) {
+      answer = `⚠️ OpenAI Hatası: ${data.error.message}`;
+    } else {
+      answer = "⚙️ Bağlantı sorunu yaşanıyor. Lütfen tekrar deneyin.";
+    }
+
     return `<div class="chat-message bot"><p>${answer}</p></div>`;
   } catch (error) {
     console.error("OpenAI fallback hatası:", error);
-    return `<div class="chat-message bot"><p>⚠️ Bir hata oluştu, lütfen tekrar deneyin.</p></div>`;
+    return `<div class="chat-message bot"><p>⚠️ Sistem şu anda yanıt veremiyor. Lütfen tekrar deneyin.</p></div>`;
   }
 }
