@@ -11,14 +11,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    const client = new OpenAI({
-      apiKey: process.env.Electro_Asistan, // senin environment key’in
-    });
-
+    const client = new OpenAI({ apiKey: process.env.Electro_Asistan });
     const { question } = req.body;
     if (!question) return res.status(400).json({ error: "No question provided" });
 
-    // 1️⃣ Anahtar kelimeyi sadeleştir
+    // 1️⃣ GPT ile sadeleştir
     const condense = await client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -31,20 +28,44 @@ export default async function handler(req, res) {
       ],
     });
 
-    const keyword = condense.choices[0].message.content.trim();
+    let keyword = condense.choices[0].message.content.trim().toLowerCase();
 
-    // 2️⃣ Ürünleri Electro API'den çek
-    const searchUrl = `https://electro-api-swart.vercel.app/api/products?q=${encodeURIComponent(keyword)}`;
-    const productsResponse = await fetch(searchUrl, { cache: "no-store" });
-    const productData = await productsResponse.json();
+    // 2️⃣ Anahtar kelime eş anlamlı genişletme
+    const synonyms = {
+      "kurutma makinesi": [
+        "çamaşır kurutma makinesi",
+        "kurutucu",
+        "kurutma cihazı",
+        "çamaşır kurutucu",
+      ],
+      "buzdolabı": ["no frost buzdolabı", "çift kapılı buzdolabı"],
+      "derin dondurucu": ["çekmeceli dondurucu", "dikey dondurucu"],
+      "ütü": ["buharlı ütü", "dikey ütü", "ütü makinesi"],
+    };
 
-    // 3️⃣ Eğer data yoksa fallback yap
+    const extraQueries = synonyms[keyword] || [];
+    const queries = [keyword, ...extraQueries];
+
+    // 3️⃣ API’den ürünleri ara (her kelime için)
+    let allProducts = [];
+    for (const q of queries) {
+      const url = `https://electro-api-swart.vercel.app/api/products?q=${encodeURIComponent(q)}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      if (data?.products?.length) allProducts.push(...data.products);
+    }
+
+    // 4️⃣ Ürünleri işleme al
     let htmlOutput = "";
-    if (productData?.products?.length > 0) {
-      const sorted = productData.products.sort(
-        (a, b) => parseFloat(a.price) - parseFloat(b.price)
+    if (allProducts.length > 0) {
+      const uniqueProducts = Object.values(
+        allProducts.reduce((acc, p) => {
+          acc[p.sku] = p;
+          return acc;
+        }, {})
       );
 
+      const sorted = uniqueProducts.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
       htmlOutput = sorted
         .slice(0, 5)
         .map(
@@ -61,17 +82,19 @@ export default async function handler(req, res) {
         .join("");
     } else {
       htmlOutput = `
-      <p>Üzgünüm, aradığınız ürün stokta bulunamadı. Ancak benzer ürünleri önermek isterim. Başka bir marka veya kapasite denemek ister misiniz?</p>`;
+      <p>Üzgünüm, aradığınız ürün stokta bulunamadı.  
+      Ancak benzer ürünleri önermek isterim.  
+      Dilersen farklı bir marka veya kapasiteyle tekrar deneyin.</p>`;
     }
 
-    // 4️⃣ GPT’ye doğal dil yanıt + HTML gönder
+    // 5️⃣ GPT ile doğal yanıt oluştur
     const gptResponse = await client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content:
-            "Sen Electro Beyaz Shop'un akıllı satış asistanısın. Kullanıcıya doğal bir dille yardımcı ol, ardından HTML ürün listesini göster.",
+            "Sen Electro Beyaz Shop'un akıllı satış asistanısın. Kullanıcıya doğal bir dille uygun ürünleri tanıt, ardından HTML ürün listesini ekle.",
         },
         {
           role: "user",
@@ -81,7 +104,7 @@ export default async function handler(req, res) {
     });
 
     const answer = gptResponse.choices[0].message.content;
-    res.status(200).json({ answer, htmlOutput, keyword });
+    res.status(200).json({ answer, htmlOutput, keyword, queries });
   } catch (error) {
     console.error("Asistan hata:", error);
     res.status(500).json({ error: "Asistan yanıt veremedi.", details: error.message });
