@@ -1,3 +1,14 @@
+// ================================
+// 🚀 ELECTRO ASİSTAN v3 (Cache Destekli)
+// ================================
+
+// Bellek içi cache (1 saat süreyle)
+let cache = {
+  data: null,
+  timestamp: 0,
+  ttl: 3600 * 1000, // 1 saat
+};
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -9,31 +20,45 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1️⃣ Ürün verisini çek
-    const response = await fetch("https://www.electrobeyazshop.com/outputxml/index.php?xml_service_id=11");
-    const xmlText = await response.text();
-
-    // 2️⃣ XML içinde JSON yakala (hata korumalı)
+    // 1️⃣ Cache kontrolü
+    const now = Date.now();
     let jsonData = null;
-    try {
-      const match = xmlText.match(/\{.*\}/s);
-      if (match) {
-        jsonData = JSON.parse(match[0]);
+
+    if (cache.data && now - cache.timestamp < cache.ttl) {
+      console.log("🧠 Cache kullanıldı (hızlı mod)");
+      jsonData = cache.data;
+    } else {
+      console.log("🌐 Yeni veri çekiliyor...");
+      const response = await fetch("https://www.electrobeyazshop.com/outputxml/index.php?xml_service_id=11");
+      const xmlText = await response.text();
+
+      // JSON parse güvenli
+      try {
+        const match = xmlText.match(/\{.*\}/s);
+        if (match) {
+          jsonData = JSON.parse(match[0]);
+          // Cache’e kaydet
+          cache.data = jsonData;
+          cache.timestamp = now;
+          console.log("✅ Cache güncellendi.");
+        } else {
+          console.warn("⚠️ JSON formatı bulunamadı!");
+        }
+      } catch (err) {
+        console.error("JSON çözümleme hatası:", err);
       }
-    } catch (err) {
-      console.warn("JSON çözümleme hatası:", err);
     }
 
-    // Eğer data yoksa OpenAI fallback’e geç
+    // Eğer veri yoksa OpenAI fallback
     if (!jsonData || !jsonData.products || jsonData.products.length === 0) {
-      console.log("Veri bulunamadı, OpenAI fallback aktif.");
+      console.log("❌ Veri bulunamadı, OpenAI fallback aktif.");
       const aiAnswer = await getAIResponse(question);
       return res.json({ htmlOutput: aiAnswer });
     }
 
     const products = jsonData.products || [];
 
-    // 3️⃣ Türkçe karakter düzeltme fonksiyonu
+    // 2️⃣ Arama
     const normalize = (str) =>
       str
         ?.toLowerCase()
@@ -47,7 +72,6 @@ export default async function handler(req, res) {
 
     const query = normalize(question);
 
-    // 4️⃣ Arama algoritması (marka + kategori + isim skorlamalı)
     const results = products
       .map((p) => {
         const combined = normalize(`${p.name} ${p.productBrand} ${p.productCategory}`);
@@ -61,13 +85,13 @@ export default async function handler(req, res) {
       .filter((p) => p.score > 0)
       .sort((a, b) => b.score - a.score);
 
-    // 5️⃣ Sonuç yoksa OpenAI cevabı dön
+    // 3️⃣ Sonuç yoksa OpenAI fallback
     if (results.length === 0) {
       const aiAnswer = await getAIResponse(question);
       return res.json({ htmlOutput: aiAnswer });
     }
 
-    // 6️⃣ En fazla 4 ürünü listele
+    // 4️⃣ HTML oluştur
     const topProducts = results.slice(0, 4);
     let htmlOutput = `
       <div class="chat-message bot"><p>İşte size uygun ürünler 👇</p></div>
@@ -95,9 +119,9 @@ export default async function handler(req, res) {
   }
 }
 
-/**
- * 🧠 OpenAI'den mantıklı yanıt alma (fallback fonksiyonu)
- */
+// ================================
+// 🧠 OPENAI FALLBACK FONKSİYONU
+// ================================
 async function getAIResponse(question) {
   try {
     const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -112,7 +136,7 @@ async function getAIResponse(question) {
           {
             role: "system",
             content:
-              "Sen Electro Asistan’sın. Kullanıcıya beyaz eşya tavsiyesi veriyorsun. Samimi ama profesyonel bir dille konuş.",
+              "Sen Electro Asistan’sın. Kullanıcıya beyaz eşya tavsiyesi veriyorsun. Samimi ama profesyonel bir dille konuş. Eğer ürün bulunmazsa, öneri ve ipucu ver.",
           },
           {
             role: "user",
