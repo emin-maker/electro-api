@@ -1,8 +1,8 @@
-// ================================
-// 🚀 ELECTRO ASİSTAN v4 (CACHE + GPT + HATA RAPORLU)
-// ================================
+// ============================================
+// 🚀 ELECTRO ASİSTAN v5 (Tek Key, GPT fallback, Cache)
+// ============================================
 
-// Bellek içi cache (1 saat)
+// 1 Saatlik cache sistemi (performans için)
 let cache = {
   data: null,
   timestamp: 0,
@@ -20,15 +20,15 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1️⃣ CACHE KONTROLÜ
+    // 🧠 Cache kontrolü
     const now = Date.now();
     let jsonData = null;
 
     if (cache.data && now - cache.timestamp < cache.ttl) {
-      console.log("🧠 Cache kullanıldı (1 saat içinde).");
+      console.log("🧠 Cache kullanıldı (veri 1 saat içinde).");
       jsonData = cache.data;
     } else {
-      console.log("🌐 Yeni XML verisi çekiliyor...");
+      console.log("🌐 XML verisi yeniden çekiliyor...");
       const response = await fetch("https://www.electrobeyazshop.com/outputxml/index.php?xml_service_id=11");
       const xmlText = await response.text();
 
@@ -40,23 +40,23 @@ export default async function handler(req, res) {
           cache.timestamp = now;
           console.log("✅ Cache güncellendi.");
         } else {
-          console.warn("⚠️ XML içinde JSON formatı bulunamadı!");
+          console.warn("⚠️ JSON formatı bulunamadı.");
         }
       } catch (err) {
-        console.error("⚠️ JSON çözümleme hatası:", err);
+        console.error("⚠️ JSON parse hatası:", err);
       }
     }
 
-    // 2️⃣ DATA KONTROLÜ
+    // 🔍 Veri kontrolü
     if (!jsonData || !jsonData.products || jsonData.products.length === 0) {
-      console.log("❌ Veri bulunamadı. GPT fallback aktif.");
+      console.log("❌ Veri boş, GPT fallback aktif.");
       const aiAnswer = await getAIResponse(question);
       return res.json({ htmlOutput: aiAnswer });
     }
 
     const products = jsonData.products || [];
 
-    // 3️⃣ SORUYU NORMALİZE ET
+    // 🧩 Normalizasyon fonksiyonu (Türkçe harfleri sadeleştir)
     const normalize = (str) =>
       str
         ?.toLowerCase()
@@ -70,28 +70,28 @@ export default async function handler(req, res) {
 
     const query = normalize(question);
 
-    // 4️⃣ AKILLI ARAMA SKORU
+    // 🔎 Basit akıllı arama algoritması
     const results = products
       .map((p) => {
         const combined = normalize(`${p.name} ${p.productBrand} ${p.productCategory}`);
         let score = 0;
         if (combined.includes(query)) score += 5;
         if (normalize(p.productBrand)?.includes(query)) score += 3;
-        if (normalize(p.productCategory)?.includes(query)) score += 3;
-        if (normalize(p.name)?.includes(query)) score += 2;
+        if (normalize(p.productCategory)?.includes(query)) score += 2;
+        if (normalize(p.name)?.includes(query)) score += 1;
         return { ...p, score };
       })
       .filter((p) => p.score > 0)
       .sort((a, b) => b.score - a.score);
 
-    // 5️⃣ SONUÇ YOKSA GPT'YE GİT
+    // 🔁 Sonuç yoksa GPT’ye sor
     if (results.length === 0) {
       console.log("🔍 Eşleşme bulunamadı, GPT fallback aktif.");
       const aiAnswer = await getAIResponse(question);
       return res.json({ htmlOutput: aiAnswer });
     }
 
-    // 6️⃣ ÜRÜNLERİ HTML HALİNE GETİR
+    // 🖼️ Ürünleri HTML formatında döndür
     const topProducts = results.slice(0, 4);
     let htmlOutput = `
       <div class="chat-message bot"><p>İşte size uygun ürünler 👇</p></div>
@@ -101,7 +101,7 @@ export default async function handler(req, res) {
     topProducts.forEach((p) => {
       htmlOutput += `
         <div class="product-card">
-          <img src="${p.imgUrl}" alt="${p.name}">
+          <img src="${p.imgUrl}" alt="${p.name}" style="max-width:150px;border-radius:8px;">
           <h3>${p.name}</h3>
           <p><strong>Marka:</strong> ${p.productBrand}</p>
           <p><strong>Fiyat:</strong> ${p.price} ${p.kur}</p>
@@ -113,20 +113,20 @@ export default async function handler(req, res) {
     htmlOutput += `</div>`;
     return res.json({ htmlOutput });
   } catch (error) {
-    console.error("🔥 API genel hatası:", error);
+    console.error("🔥 Genel hata:", error);
     const aiAnswer = await getAIResponse(question);
     return res.json({ htmlOutput: aiAnswer });
   }
 }
 
-// ================================
-// 🧠 OPENAI FALLBACK (AKILLI ASİSTAN)
-// ================================
+// ============================================
+// 🧠 GPT Fallback (OpenAI)
+// ============================================
 async function getAIResponse(question) {
-  const OPENAI_KEY = process.env.OPENAI_API_KEY || process.env.EBS_Key;
+  const OPENAI_KEY = process.env.Electro_Asistan;
 
   if (!OPENAI_KEY) {
-    console.error("❌ API key bulunamadı (OPENAI_API_KEY veya EBS_Key tanımlı değil).");
+    console.error("❌ API key bulunamadı (Electro_Asistan).");
     return `<div class="chat-message bot"><p>⚠️ OpenAI anahtarı tanımlı değil. Lütfen sistem yöneticinize bildirin.</p></div>`;
   }
 
@@ -143,7 +143,7 @@ async function getAIResponse(question) {
           {
             role: "system",
             content:
-              "Sen Electro Asistan’sın. Kullanıcıya beyaz eşya önerileri sunuyorsun. Ürün bulamazsan öneriler ve ipuçları ver. Samimi ama profesyonel bir dil kullan.",
+              "Sen Electro Asistan’sın. Kullanıcılara beyaz eşya ürünleri hakkında öneriler sunuyorsun. Ürün bulunamazsa alternatif fikirler veya ipuçları ver. Samimi ama profesyonel konuş.",
           },
           {
             role: "user",
@@ -161,8 +161,6 @@ async function getAIResponse(question) {
       answer = data.choices[0].message.content;
     } else if (data?.error?.message) {
       answer = `⚠️ OpenAI Hatası: ${data.error.message}`;
-    } else {
-      answer = "⚙️ Bağlantı sorunu yaşanıyor. Lütfen tekrar deneyin.";
     }
 
     return `<div class="chat-message bot"><p>${answer}</p></div>`;
