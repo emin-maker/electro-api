@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const client = new OpenAI({ apiKey: process.env.EBS_Key });
+    const client = new OpenAI({ apiKey: process.env.Electro_Asistan });
     const { question } = req.body;
     if (!question)
       return res.status(400).json({ error: "No question provided" });
